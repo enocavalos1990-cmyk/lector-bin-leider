@@ -39,8 +39,7 @@ async function toggleTorch(){if(!stream)return;const track=stream.getVideoTracks
 function stop(){running=false;torchOn=false;const tb=document.querySelector('#torch');tb.disabled=true;tb.classList.remove('active');tb.textContent='🔦 Linterna';if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null;statusEl.textContent='Cámara detenida';statusEl.className='status';}
 document.querySelector('#beginWeigh').onclick=beginWeigh;document.querySelector('#endWeigh').onclick=endWeigh;document.querySelector('#start').onclick=start;document.querySelector('#stop').onclick=stop;document.querySelector('#nn').onclick=addNN;document.querySelector('#torch').onclick=toggleTorch;
 document.querySelector('#clear').onclick=()=>{if(scans.length&&confirm('¿Borrar todas las lecturas?')){scans=[];seen.clear();last.textContent='----';full.textContent='';save();render()}};
-document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(scans.map(x=>x.last4).join('
-'));statusEl.textContent='Lista copiada';};
+document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(scans.map(x=>x.last4).join('\\n'));statusEl.textContent='Lista copiada';};
 document.querySelector('#csv').onclick=()=>{if(!scans.length)return;const inicio=session?.started?new Date(session.started).toLocaleString('es-CL'):'';const fin=session?.ended?new Date(session.ended).toLocaleString('es-CL'):'';const csv=`Inicio pesaje;${inicio}\r
 Fin pesaje;${fin}\r
 Total BIN;${scans.length}\r

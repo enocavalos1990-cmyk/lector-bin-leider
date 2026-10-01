@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Lector BIN LEIDER</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#17202a;background:#f4f6f7}*{box-sizing:border-box}body{margin:0}.app{max-width:720px;margin:auto;padding:16px}.card{background:white;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 2px 12px #0001}h1{font-size:24px;margin:0 0 6px}.muted{color:#65717c;font-size:14px}.scanner{position:relative;overflow:hidden;border-radius:16px;background:#111;aspect-ratio:4/3;margin-top:12px}video{width:100%;height:100%;object-fit:cover}.frame{position:absolute;inset:18%;border:3px solid #fff;border-radius:14px;box-shadow:0 0 0 999px #0005;pointer-events:none}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}button{border:0;border-radius:13px;padding:14px;font-size:16px;font-weight:700;background:#e8edf1;color:#17202a}button.primary{background:#17202a;color:white}button.danger{color:#a00}.last{text-align:center;padding:12px}.last small{display:block;color:#65717c}.last strong{display:block;font-size:52px;letter-spacing:3px;margin-top:2px}.status{text-align:center;font-weight:650;margin-top:8px}.list{width:100%;border-collapse:collapse}.list th,.list td{padding:10px;border-bottom:1px solid #e7eaec;text-align:left}.list th:first-child,.list td:first-child{width:55px;text-align:center}.empty{text-align:center;color:#7b8790;padding:24px}.count{font-weight:700}.ok{color:#087f23}.err{color:#b42318}
+</style>
+</head>
+<body><main class="app">
+<section class="card"><h1>Lector BIN LEIDER</h1><div class="muted">Escanea de corrido. La app extrae el folio BIN desde el QR, hace PIP y guarda los últimos 4 dígitos.</div>
+<div class="scanner"><video id="video" playsinline muted></video><div class="frame"></div></div>
+<div id="status" class="status">Cámara detenida</div>
+<div class="buttons"><button id="start" class="primary">Iniciar cámara</button><button id="stop">Detener</button></div></section>
+<section class="card last"><small>Último BIN leído</small><strong id="last">----</strong><span id="full" class="muted"></span></section>
+<section class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Lecturas</b><span class="count"><span id="count">0</span> BIN</span></div>
+<table class="list"><thead><tr><th>#</th><th>Últimos 4</th><th>Folio completo</th></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Todavía no hay lecturas.</div>
+<div class="buttons"><button id="csv" class="primary">Exportar Excel (CSV)</button><button id="copy">Copiar lista</button><button id="clear" class="danger">Borrar todo</button><button id="test">Probar enlace</button></div></section>
+</main>
+<script>
+const video=document.querySelector('#video'), statusEl=document.querySelector('#status'), rows=document.querySelector('#rows'), empty=document.querySelector('#empty'), last=document.querySelector('#last'), full=document.querySelector('#full'), count=document.querySelector('#count');
+let stream=null, detector=null, running=false, scans=[], seen=new Set(), lastRaw='', lastAt=0, audioCtx=null;
+function beep(){try{audioCtx ||= new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.value=1150;g.gain.setValueAtTime(.12,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.10);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.10);if(navigator.vibrate)navigator.vibrate(45)}catch(e){}}
+function decodeLeider(raw){try{const u=new URL(raw);const data=u.searchParams.get('data');if(!data)return null;let b64=data.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';const decoded=atob(b64);const parts=decoded.split('#');const folio=parts.find(x=>/^B\d+$/i.test(x));if(!folio)return null;const digits=folio.replace(/\D/g,'');return {folio:folio.toUpperCase(), last4:digits.slice(-4), decoded};}catch(e){return null}}
+function add(raw){const now=Date.now();if(raw===lastRaw&&now-lastAt<1800)return;lastRaw=raw;lastAt=now;const r=decodeLeider(raw);if(!r){statusEl.textContent='QR leído, pero no corresponde a un BIN LEIDER';statusEl.className='status err';return}if(seen.has(r.folio)){statusEl.textContent=`Duplicado omitido: ${r.last4}`;statusEl.className='status';beep();return}seen.add(r.folio);scans.push(r);last.textContent=r.last4;full.textContent=r.folio;statusEl.textContent=`Leído: ${r.last4}`;statusEl.className='status ok';beep();render();}
+function render(){rows.innerHTML=scans.map((r,i)=>`<tr><td>${i+1}</td><td><b>${r.last4}</b></td><td>${r.folio}</td></tr>`).join('');empty.style.display=scans.length?'none':'block';count.textContent=scans.length;}
+async function start(){if(!('BarcodeDetector'in window)){statusEl.textContent='Este navegador no tiene lector QR compatible. Prueba Chrome/Android.';statusEl.className='status err';return}try{detector=new BarcodeDetector({formats:['qr_code']});stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=stream;await video.play();running=true;statusEl.textContent='Apunta al QR';statusEl.className='status ok';scanLoop();}catch(e){statusEl.textContent='No se pudo abrir la cámara. Revisa el permiso de cámara.';statusEl.className='status err';}}
+async function scanLoop(){if(!running)return;try{const codes=await detector.detect(video);for(const c of codes) if(c.rawValue)add(c.rawValue);}catch(e){}requestAnimationFrame(scanLoop)}
+function stop(){running=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null;statusEl.textContent='Cámara detenida';statusEl.className='status';}
+document.querySelector('#start').onclick=start;document.querySelector('#stop').onclick=stop;
+document.querySelector('#clear').onclick=()=>{if(scans.length&&confirm('¿Borrar todas las lecturas?')){scans=[];seen.clear();last.textContent='----';full.textContent='';render()}};
+document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(scans.map(x=>x.last4).join('\n'));statusEl.textContent='Lista copiada';};
+document.querySelector('#csv').onclick=()=>{if(!scans.length)return;const csv='Orden;BIN_4_digitos;Folio_BIN\r\n'+scans.map((r,i)=>`${i+1};${r.last4};${r.folio}`).join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bins_leider_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)};
+document.querySelector('#test').onclick=()=>{const raw=prompt('Pega aquí un enlace LEIDER para probar:');if(raw)add(raw.trim())};
+render();
+</script></body></html>

@@ -24,9 +24,10 @@
 <input id="weight3" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" placeholder="3.er acumulado" style="width:100%;border:1px solid #ccd3d8;border-radius:12px;padding:14px;font-size:20px">
 </div><button id="sendWeights" class="primary" style="width:100%;margin-top:10px">Enviar pesos</button>
 <div id="weightMessage" class="status muted">Inicia un pesaje para ingresar pesos.</div></div>
+<div class="buttons"><button id="exportReception" class="primary">Exportar Excel (CSV)</button><button id="captureQr">Capturar QR</button></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px"><b>BIN pesados</b><span class="count"><span id="weightCount">0</span> BIN</span></div>
 <table class="list"><thead><tr><th>#</th><th>QR</th><th>Bruto</th><th>Neto</th></tr></thead><tbody id="weightRows"></tbody></table><div id="weightEmpty" class="empty">Todavía no hay pesos.</div>
-<div class="buttons"><button id="exportReception" class="primary">Exportar Excel (CSV)</button><button id="captureQr">Capturar QR</button></div></section>
+</section>
 <section class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Pesajes guardados</b><span id="historyCount" class="muted">0</span></div><div id="history" class="empty">Todavía no hay pesajes guardados.</div></section></div>
 </main>
 <script>

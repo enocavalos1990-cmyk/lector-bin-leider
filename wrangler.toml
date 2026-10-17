@@ -1,0 +1,15 @@
+name = "lector-bin-leider"
+main = "src/worker-entry.js"
+compatibility_date = "2026-10-17"
+
+# Publicar HTML original y paneles como texto desde el mismo Worker.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lector-bin-leider"
+database_id = "7ef1c560-a37e-4c90-b898-a9456107f7ac"
+migrations_dir = "migrations"

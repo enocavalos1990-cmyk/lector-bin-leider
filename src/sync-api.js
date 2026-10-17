@@ -56,14 +56,15 @@ async function handler(request,env){
     if(code!==null&&!(code==="NN"||typeof code==="string"&&/^\d{4}$/.test(code)))return error(400,"invalid_bin");
     const id=uuid();
     try{
-      await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) VALUES(?,?,?,?,?,?,?,?)")
-      .bind(id,weighingId,body.position,code,typeof body.folio==="string"?body.folio.slice(0,100):null,body.manual===true?1:0,body.gross_kg??null,body.tare_kg).run();
+      const inserted=await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM weighings WHERE id=? AND workspace_id=? AND status=\'active\')")
+      .bind(id,weighingId,body.position,code,typeof body.folio==="string"?body.folio.slice(0,100):null,body.manual===true?1:0,body.gross_kg??null,body.tare_kg,weighingId,ws).run();
+      if(!inserted.meta.changes)return error(409,"weighing_finalized");
     }catch{return error(409,"row_or_bin_conflict")}
     return json({id,revision:1},201);
   }
   if(request.method==="PATCH"&&rowId&&path===`/api/weighings/${weighingId}/rows/${rowId}`){
     const body=await payload(request);
-    if(!Number.isInteger(body.expected_revision)||!validGross(body.gross_kg))return error(400,"invalid_update");
+    if(!Number.isInteger(body.expected_revision)||body.expected_revision<1||!Object.hasOwn(body,"gross_kg")||!validGross(body.gross_kg))return error(400,"invalid_update");
     const result=await db.prepare("UPDATE weighing_rows SET gross_kg=?,revision=revision+1,updated_at=? WHERE id=? AND weighing_id=? AND revision=? AND EXISTS (SELECT 1 FROM weighings WHERE id=? AND workspace_id=? AND status='active')")
     .bind(body.gross_kg,new Date().toISOString(),rowId,weighingId,body.expected_revision,weighingId,ws).run();
     if(!result.meta.changes)return error(409,"revision_conflict_or_missing");
@@ -71,7 +72,7 @@ async function handler(request,env){
   }
   if(request.method==="POST"&&path===`/api/weighings/${weighingId}/finalize`){
     const body=await payload(request);
-    if(!Number.isInteger(body.expected_revision))return error(400,"invalid_revision");
+    if(!Number.isInteger(body.expected_revision)||body.expected_revision<1)return error(400,"invalid_revision");
     const result=await db.prepare("UPDATE weighings SET status='finalized',finalized_at=?,updated_at=?,revision=revision+1 WHERE id=? AND workspace_id=? AND status='active' AND revision=?")
     .bind(new Date().toISOString(),new Date().toISOString(),weighingId,ws,body.expected_revision).run();
     if(!result.meta.changes)return error(409,"revision_conflict");

@@ -117,7 +117,10 @@ $('stop').onclick=async()=>{
  catch(e){text('No se pudo finalizar: '+e.message,true);await refreshList().catch(()=>{})}
  finally{state.busy=false;updateControls()}
 };
-setInterval(async()=>{if(!state.token||state.busy)return;try{
+setInterval(async()=>{if(!state.token||state.busy)return;
+ const focused=document.activeElement;
+ if(focused?.dataset?.rowId && focused.value!==String(state.rows.find(r=>r.id===focused.dataset.rowId)?.gross_kg??''))return;
+ try{
  const id=$('weighings').value;
  if(!id)return;
  await refreshList();

@@ -51,16 +51,19 @@ async function handler(request,env){
   if(weighing.status!=="active")return error(409,"weighing_finalized");
   if(request.method==="POST"&&path===`/api/weighings/${weighingId}/rows`){
     const body=await payload(request);
-    if(!Number.isInteger(body.position)||body.position<1||!validGross(body.gross_kg??null)||![41,44].includes(body.tare_kg))return error(400,"invalid_row");
+    if(!validGross(body.gross_kg??null)||![41,44].includes(body.tare_kg))return error(400,"invalid_row");
     const code=body.bin_code??null;
     if(code!==null&&!(code==="NN"||typeof code==="string"&&/^\d{4}$/.test(code)))return error(400,"invalid_bin");
     const id=uuid();
+    // El servidor calcula la siguiente posición al insertar; el cliente no la decide.
+    // Un segundo escritor que compita por la misma posición debe reintentar tras 409.
     try{
-      const inserted=await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM weighings WHERE id=? AND workspace_id=? AND status=\'active\')")
-      .bind(id,weighingId,body.position,code,typeof body.folio==="string"?body.folio.slice(0,100):null,body.manual===true?1:0,body.gross_kg??null,body.tare_kg,weighingId,ws).run();
+      const inserted=await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) SELECT ?,w.id,COALESCE((SELECT MAX(position)+1 FROM weighing_rows WHERE weighing_id=w.id),1),?,?,?,?,?,? FROM weighings w WHERE w.id=? AND w.workspace_id=? AND w.status='active'")
+      .bind(id,code,typeof body.folio==="string"?body.folio.slice(0,100):null,body.manual===true?1:0,body.gross_kg??null,body.tare_kg,weighingId,ws).run();
       if(!inserted.meta.changes)return error(409,"weighing_finalized");
     }catch{return error(409,"row_or_bin_conflict")}
-    return json({id,revision:1},201);
+    const saved=await db.prepare("SELECT position FROM weighing_rows WHERE id=? AND weighing_id=?").bind(id,weighingId).first();
+    return json({id,position:saved?.position,revision:1},201);
   }
   if(request.method==="PATCH"&&rowId&&path===`/api/weighings/${weighingId}/rows/${rowId}`){
     const body=await payload(request);

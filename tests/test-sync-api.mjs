@@ -16,6 +16,7 @@ function fakeDB(){
       async first(){
         if(sql.includes('FROM authorized_devices'))return item.args[0]===digest?{id:'device-1',workspace_id:'w1'}:null;
         if(sql.includes('FROM weighings WHERE id='))return item.args[0]==='p1'&&item.args[1]==='w1'?{id:'p1',status:'active',revision:1}:null;
+        if(sql.includes('SELECT position FROM weighing_rows'))return {position:1};
         return null;
       },
       async all(){return {results:[]}},
@@ -56,9 +57,11 @@ test('crea fila QR sin peso y calcula tara al completar',async()=>{
   const {db,log}=fakeDB();
   const r=await api.fetch(req('/api/weighings/p1/rows','POST',{position:1,bin_code:'2589',gross_kg:null,tare_kg:41}),{DB:db});
   assert.equal(r.status,201);
-  assert.deepEqual(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).args.slice(1,4),['p1',1,'2589']);
+  assert.deepEqual(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).args.slice(0,2),[r.status===201?JSON.parse(await r.clone().text()).id:null,'2589']);
+  assert.match(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).sql,/MAX\(position\)\+1/);
   assert.match(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).sql,/status='active'/);
   assert.deepEqual(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).args.slice(-2),['p1','w1']);
+  assert.equal((await r.json()).position,1);
   const patch=await api.fetch(req('/api/weighings/p1/rows/r1','PATCH',{expected_revision:1,gross_kg:440}),{DB:db});
   assert.equal(patch.status,200);
   assert.deepEqual(log.find(x=>x.sql.startsWith('UPDATE weighing_rows')).args.slice(0,1),[440]);

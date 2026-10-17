@@ -19,3 +19,5 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Pruebas API de sincronizacion
         run: node --test tests/test-sync-api.mjs
+      - name: Comprobar empaquetado Worker sin publicar
+        run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/lector-leider-build

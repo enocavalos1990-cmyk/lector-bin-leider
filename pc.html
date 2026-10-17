@@ -15,7 +15,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px so
 @media(max-width:600px){table{font-size:13px}th,td{padding:5px}input[type=number]{width:75px}}
 </style></head><body><main class="wrap">
 <header><div><h1>Recepción BIN LEIDER</h1><small>Panel PC experimental · pesajes compartidos</small></div><strong id="sync">Desconectado</strong></header>
-<section><div class="bar"><label>Clave de dispositivo <input id="token" type="password" autocomplete="off" placeholder="Token autorizado"></label><button id="connect" class="primary">Conectar</button></div><small>Este panel necesita una API D1 configurada y un dispositivo autorizado. La clave solo permanece en esta pestaña, no se guarda.</small></section>
+<section><div class="bar"><label>Usuario <input id="username" value="recepcion" autocomplete="username"></label><label>Contraseña <input id="password" type="password" autocomplete="current-password" placeholder="Tu contraseña"></label><button id="connect" class="primary">Conectar</button></div><small>El usuario es recepcion. La contraseña no se guarda en esta página.</small></section>
 <section><div class="bar"><h2>Pesajes</h2><button id="refresh">Actualizar</button></div>
 <div class="bar"><label>Seleccionar <select id="weighings"><option value="">Sin pesajes</option></select></label><span><label>Fecha <input id="day" type="date"></label> <label>N.º <input id="number" type="number" min="1" value="1"></label> <button id="start" class="primary">Iniciar pesaje</button></span></div>
 <div class="bar" style="margin-top:12px"><strong id="state">Sin pesaje seleccionado</strong><button id="stop" class="danger" disabled>Finalizar pesaje</button></div>
@@ -90,7 +90,11 @@ async function saveAndAdvance(id,input){
  finally{state.busy=false;updateControls()}
 }
 $('connect').onclick=async()=>{
- state.token=$('token').value.trim();$('token').value='';
+ const username=$('username').value.trim(),password=$('password').value;
+ $('password').value='';
+ try {const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+ const result=await response.json();if(!response.ok)throw Error(result.error||'No se pudo iniciar sesión');state.token=result.token;}
+ catch(e){text('Acceso rechazado: '+e.message,true);return}
  try{await refreshList();text('Sesión conectada.')}catch(e){state.token='';updateControls();text(e.message,true)}
 };
 $('refresh').onclick=()=>refreshList().catch(e=>text(e.message,true));

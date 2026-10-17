@@ -8,14 +8,14 @@ const source=await readFile(new URL('../src/sync-api.js',import.meta.url),'utf8'
 const api=(await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'))).default;
 const token='a'.repeat(40);
 const digest=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))).toString('hex');
-function fakeDB(){
+function fakeDB(status='active'){
   const log=[];
   const db={prepare(sql){
     const item={sql,args:[]};log.push(item);
     return {bind(...args){item.args=args;return this},
       async first(){
         if(sql.includes('FROM authorized_devices'))return item.args[0]===digest?{id:'device-1',workspace_id:'w1'}:null;
-        if(sql.includes('FROM weighings WHERE id='))return item.args[0]==='p1'&&item.args[1]==='w1'?{id:'p1',status:'active',revision:1}:null;
+        if(sql.includes('FROM weighings WHERE id='))return item.args[0]==='p1'&&item.args[1]==='w1'?{id:'p1',status,revision:1}:null;
         if(sql.includes('SELECT position FROM weighing_rows'))return {position:1};
         return null;
       },
@@ -84,4 +84,20 @@ test('exige revision al editar y finalizar',async()=>{
 test('un pesaje ajeno no se puede consultar',async()=>{
   const {db}=fakeDB();
   assert.equal((await api.fetch(req('/api/weighings/ajeno'),{DB:db})).status,404);
+});
+
+test('pesaje finalizado rechaza nuevos BIN y edicion de kilos',async()=>{
+  const {db,log}=fakeDB('finalized');
+  const add=await api.fetch(req('/api/weighings/p1/rows','POST',{bin_code:'2589',gross_kg:null,tare_kg:41}),{DB:db});
+  const edit=await api.fetch(req('/api/weighings/p1/rows/r1','PATCH',{expected_revision:1,gross_kg:450}),{DB:db});
+  assert.equal(add.status,409);
+  assert.equal(edit.status,409);
+  assert.equal(log.filter(x=>x.sql.startsWith('INSERT INTO weighing_rows')||x.sql.startsWith('UPDATE weighing_rows')).length,0);
+});
+test('pesaje finalizado sigue siendo consultable para revisar historico',async()=>{
+  const {db}=fakeDB('finalized');
+  const response=await api.fetch(req('/api/weighings/p1'),{DB:db});
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.weighing.status,'finalized');
 });

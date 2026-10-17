@@ -57,6 +57,8 @@ test('crea fila QR sin peso y calcula tara al completar',async()=>{
   const r=await api.fetch(req('/api/weighings/p1/rows','POST',{position:1,bin_code:'2589',gross_kg:null,tare_kg:41}),{DB:db});
   assert.equal(r.status,201);
   assert.deepEqual(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).args.slice(1,4),['p1',1,'2589']);
+  assert.match(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).sql,/status='active'/);
+  assert.deepEqual(log.find(x=>x.sql.startsWith('INSERT INTO weighing_rows')).args.slice(-2),['p1','w1']);
   const patch=await api.fetch(req('/api/weighings/p1/rows/r1','PATCH',{expected_revision:1,gross_kg:440}),{DB:db});
   assert.equal(patch.status,200);
   assert.deepEqual(log.find(x=>x.sql.startsWith('UPDATE weighing_rows')).args.slice(0,1),[440]);
@@ -72,6 +74,8 @@ test('rechaza pesos o taras invalidos',async()=>{
 test('exige revision al editar y finalizar',async()=>{
   const {db}=fakeDB();
   assert.equal((await api.fetch(req('/api/weighings/p1/rows/r1','PATCH',{gross_kg:400}),{DB:db})).status,400);
+  assert.equal((await api.fetch(req('/api/weighings/p1/rows/r1','PATCH',{expected_revision:1}),{DB:db})).status,400);
+  assert.equal((await api.fetch(req('/api/weighings/p1/finalize','POST',{expected_revision:0}),{DB:db})).status,400);
   assert.equal((await api.fetch(req('/api/weighings/p1/finalize','POST',{expected_revision:1}),{DB:db})).status,200);
 });
 test('un pesaje ajeno no se puede consultar',async()=>{

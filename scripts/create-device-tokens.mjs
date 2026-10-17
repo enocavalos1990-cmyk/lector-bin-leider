@@ -3,11 +3,11 @@
 // node scripts/create-device-tokens.mjs
 import {randomBytes,createHash,randomUUID} from 'node:crypto';
 const labels=['Celular','PC'];
-const workspaceId=randomUUID();
+const workspaceId='recepcion-leider';
 const workspaceName='Recepción LEIDER';
 const q=s=>"'"+s.replaceAll("'","''")+"'";
 const sql=[
-  `INSERT INTO workspaces(id,name) VALUES (${q(workspaceId)},${q(workspaceName)});`
+  `INSERT OR IGNORE INTO workspaces(id,name) VALUES (${q(workspaceId)},${q(workspaceName)});`
 ];
 const tokens=[];
 for(const label of labels){

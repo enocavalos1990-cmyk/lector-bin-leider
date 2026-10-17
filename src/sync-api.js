@@ -4,12 +4,28 @@
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 const error=(status,message)=>json({error:message},status);
 const uuid=()=>crypto.randomUUID();
+const hex=bytes=>Array.from(new Uint8Array(bytes),v=>v.toString(16).padStart(2,"0")).join("");
+const hashText=async value=>hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)));
 async function authenticate(request,db){
-  const match=/^Bearer ([A-Za-z0-9._~-]{24,256})$/.exec(request.headers.get("authorization")||"");
+  const match=/^Bearer ([A-Za-z0-9_-]{32,128})$/.exec(request.headers.get("authorization")||"");
   if(!match)return null;
-  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(match[1]));
-  const hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,"0")).join("");
-  return db.prepare("SELECT id, workspace_id FROM authorized_devices WHERE token_hash=? AND revoked_at IS NULL").bind(hash).first();
+  const hash=await hashText(match[1]);
+  return db.prepare("SELECT workspace_id FROM login_sessions WHERE token_hash=? AND expires_at > ?")
+    .bind(hash,new Date().toISOString()).first();
+}
+async function login(request,env){
+  if(!env.RECEPTION_PASSWORD)return error(503,"login_not_configured");
+  const body=await payload(request);
+  if(body?.username!=="recepcion"||typeof body?.password!=="string"||body.password.length>256)return error(401,"invalid_credentials");
+  const a=await hashText(body.password),b=await hashText(env.RECEPTION_PASSWORD);
+  if(a!==b)return error(401,"invalid_credentials");
+  const workspace=await env.DB.prepare("SELECT id FROM workspaces WHERE id=?").bind("recepcion-leider").first();
+  if(!workspace)return error(503,"workspace_not_configured");
+  const token=hex(crypto.getRandomValues(new Uint8Array(32)));
+  const expires=new Date(Date.now()+7*86400000).toISOString();
+  await env.DB.prepare("INSERT INTO login_sessions(id,workspace_id,token_hash,expires_at) VALUES(?,?,?,?)")
+    .bind(uuid(),workspace.id,await hashText(token),expires).run();
+  return json({token,expires_at:expires});
 }
 async function payload(request){
   if(Number(request.headers.get("content-length")||0)>16384)throw new Error("body_too_large");
@@ -21,6 +37,8 @@ const validId=x=>typeof x==="string"&&/^[A-Za-z0-9_-]{1,80}$/.test(x);
 const validGross=x=>x===null||(Number.isInteger(x)&&x>=0&&x<=100000);
 async function handler(request,env){
   if(!env.DB)return error(503,"database_not_configured");
+  const pathname=new URL(request.url).pathname;
+  if(request.method==="POST"&&pathname==="/api/login")return login(request,env);
   const device=await authenticate(request,env.DB);
   if(!device)return error(401,"unauthorized");
   const url=new URL(request.url),path=url.pathname;

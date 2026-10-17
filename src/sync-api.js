@@ -42,7 +42,7 @@ async function handler(request,env){
   const match=/^\/api\/weighings\/([A-Za-z0-9_-]+)(?:\/rows(?:\/([A-Za-z0-9_-]+))?|\/finalize)?$/.exec(path);
   if(!match||!validId(match[1]))return error(404,"not_found");
   const weighingId=match[1],rowId=match[2];
-  const weighing=await db.prepare("SELECT id,status,revision FROM weighings WHERE id=? AND workspace_id=?").bind(weighingId,ws).first();
+  const weighing=await db.prepare("SELECT id,local_day,display_number,status,revision FROM weighings WHERE id=? AND workspace_id=?").bind(weighingId,ws).first();
   if(!weighing)return error(404,"not_found");
   if(request.method==="GET"&&path===`/api/weighings/${weighingId}`){
     const rows=await db.prepare("SELECT id,position,bin_code,folio,manual,gross_kg,tare_kg,net_kg,revision FROM weighing_rows WHERE weighing_id=? ORDER BY position").bind(weighingId).all();

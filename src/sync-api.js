@@ -58,7 +58,7 @@ async function handler(request,env){
     // El servidor calcula la siguiente posición al insertar; el cliente no la decide.
     // Un segundo escritor que compita por la misma posición debe reintentar tras 409.
     try{
-      const inserted=await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) SELECT ?,w.id,COALESCE((SELECT MAX(position)+1 FROM weighing_rows WHERE weighing_id=w.id),1),?,?,?,?,?,? FROM weighings w WHERE w.id=? AND w.workspace_id=? AND w.status='active'")
+      const inserted=await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) SELECT ?,w.id,COALESCE((SELECT MAX(position)+1 FROM weighing_rows WHERE weighing_id=w.id),1),?,?,?,?,? FROM weighings w WHERE w.id=? AND w.workspace_id=? AND w.status='active'")
       .bind(id,code,typeof body.folio==="string"?body.folio.slice(0,100):null,body.manual===true?1:0,body.gross_kg??null,body.tare_kg,weighingId,ws).run();
       if(!inserted.meta.changes)return error(409,"weighing_finalized");
     }catch{return error(409,"row_or_bin_conflict")}

@@ -16,6 +16,6 @@ class OriginalWorkerRoutesTest(unittest.TestCase):
         self.assertIn("syncApi.fetch(request,env)",s)
     def test_no_hay_despliegue_automatico_en_configuracion(self):
         s=(ROOT/'wrangler.example.toml').read_text(encoding='utf-8')
-        self.assertIn('REEMPLAZAR_CON_ID_D1_REAL',s)
+        self.assertIn('database_id = "7ef1c560-a37e-4c90-b898-a9456107f7ac"',s)
         self.assertIn('name = "lector-bin-leider"',s)
 if __name__=='__main__':unittest.main()

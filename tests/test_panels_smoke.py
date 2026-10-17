@@ -33,8 +33,13 @@ class PanelsSmokeTest(unittest.TestCase):
   self.assertIn("return await run(async()=>",self.mobile)
   self.assertIn("if(saved)$(\'manual\').value=\'\'",self.mobile)
   self.assertIn("return false",self.mobile)
+ def test_login_con_usuario_y_contrasena(self):
+  for panel in (self.pc,self.mobile):
+   self.assertIn('id="username"',panel)
+   self.assertIn('id="password"',panel)
+   self.assertIn("'/api/login'",panel)
  def test_backend_valida_permisos_y_cierre(self):
-  self.assertIn("authorized_devices",self.api)
+  self.assertIn("login_sessions",self.api)
   self.assertIn("status='active'",self.api)
   self.assertIn("revision=revision+1",self.api)
 

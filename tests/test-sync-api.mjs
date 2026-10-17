@@ -14,7 +14,8 @@ function fakeDB(status='active'){
     const item={sql,args:[]};log.push(item);
     return {bind(...args){item.args=args;return this},
       async first(){
-        if(sql.includes('FROM authorized_devices'))return item.args[0]===digest?{id:'device-1',workspace_id:'w1'}:null;
+        if(sql.includes('FROM login_sessions'))return item.args[0]===digest?{workspace_id:'w1'}:null;
+        if(sql.includes('FROM workspaces WHERE id='))return {id:'recepcion-leider'};
         if(sql.includes('FROM weighings WHERE id='))return item.args[0]==='p1'&&item.args[1]==='w1'?{id:'p1',status,revision:1}:null;
         if(sql.includes('SELECT position FROM weighing_rows'))return {position:1};
         return null;
@@ -35,7 +36,7 @@ test('sin D1 responde 503',async()=>{
   const r=await api.fetch(req('/api/weighings'),{});
   assert.equal(r.status,503);
 });
-test('requiere token valido para consultar',async()=>{
+test('requiere sesion valida para consultar',async()=>{
   const {db}=fakeDB();
   assert.equal((await api.fetch(req('/api/weighings','GET',undefined,null),{DB:db})).status,401);
   assert.equal((await api.fetch(req('/api/weighings','GET',undefined,'b'.repeat(40)),{DB:db})).status,401);
@@ -100,4 +101,14 @@ test('pesaje finalizado sigue siendo consultable para revisar historico',async()
   assert.equal(response.status,200);
   const result=await response.json();
   assert.equal(result.weighing.status,'finalized');
+});
+
+test('inicia sesion con usuario recepcion y contraseña configurada',async()=>{
+ const {db}=fakeDB();
+ const response=await api.fetch(req('/api/login','POST',{username:'recepcion',password:'correcta'},null),{DB:db,RECEPTION_PASSWORD:'correcta'});
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.match(body.token,/^[a-f0-9]{64}$/);
+ assert.equal((await api.fetch(req('/api/login','POST',{username:'recepcion',password:'incorrecta'},null),{DB:db,RECEPTION_PASSWORD:'correcta'})).status,401);
+ assert.equal((await api.fetch(req('/api/login','POST',{username:'recepcion',password:'correcta'},null),{DB:db})).status,503);
 });

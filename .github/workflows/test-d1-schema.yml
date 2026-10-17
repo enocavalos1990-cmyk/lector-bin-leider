@@ -7,6 +7,8 @@ on:
       - 'migrations/**'
       - 'tests/**'
       - 'src/sync-api.js'
+      - 'pc.html'
+      - 'mobile-sync.html'
       - '.github/workflows/test-d1-schema.yml'
   workflow_dispatch:
 

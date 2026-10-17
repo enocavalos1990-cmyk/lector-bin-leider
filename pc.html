@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lector BIN LEIDER · Recepción PC (prueba)</title>
+<style>
+:root{font-family:system-ui,Arial,sans-serif;color:#18232e;background:#f3f5f7}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:18px}
+header,.bar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+section{background:#fff;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
+button,input,select{font:inherit;padding:10px;border:1px solid #cad3db;border-radius:9px}
+button{cursor:pointer;background:#edf0f4;font-weight:600}button.primary{background:#16364e;color:#fff}
+button.danger{background:#ffe9e9;color:#8c1c1c}button:disabled{opacity:.45;cursor:default}
+input[type=number]{width:118px}input[type=password]{min-width:250px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5eaee;text-align:left}
+.notice{min-height:25px;margin:9px 0}small{color:#526575}.pending{background:#fff8d8}
+@media(max-width:600px){table{font-size:13px}th,td{padding:5px}input[type=number]{width:75px}}
+</style></head><body><main class="wrap">
+<header><div><h1>Recepción BIN LEIDER</h1><small>Panel PC experimental · pesajes compartidos</small></div><strong id="sync">Desconectado</strong></header>
+<section><div class="bar"><label>Clave de dispositivo <input id="token" type="password" autocomplete="off" placeholder="Token autorizado"></label><button id="connect" class="primary">Conectar</button></div><small>Este panel necesita una API D1 configurada y un dispositivo autorizado. La clave solo permanece en esta pestaña, no se guarda.</small></section>
+<section><div class="bar"><h2>Pesajes</h2><button id="refresh">Actualizar</button></div>
+<div class="bar"><label>Seleccionar <select id="weighings"><option value="">Sin pesajes</option></select></label><span><label>Fecha <input id="day" type="date"></label> <label>N.º <input id="number" type="number" min="1" value="1"></label> <button id="start" class="primary">Iniciar pesaje</button></span></div>
+<div class="bar" style="margin-top:12px"><strong id="state">Sin pesaje seleccionado</strong><button id="stop" class="danger" disabled>Finalizar pesaje</button></div>
+</section>
+<section><div class="bar"><h2>Bins del pesaje</h2><small>Enter guarda kilos y avanza al siguiente BIN pendiente</small></div><div id="message" class="notice" role="status" aria-live="polite"></div>
+<table><thead><tr><th>N.º</th><th>BIN</th><th>Bruto (kg)</th><th>Tara</th><th>Neto (kg)</th><th>Estado</th></tr></thead><tbody id="rows"><tr><td colspan="6">Selecciona un pesaje.</td></tr></tbody></table>
+</section></main>
+<script>
+const $=id=>document.getElementById(id);
+const state={token:'',weighings:[],weighing:null,rows:[],busy:false};
+const text=(message,problem=false)=>{ $('message').textContent=message;$('message').style.color=problem?'#b42318':'#18623e'};
+$('day').value=new Date().toLocaleDateString('en-CA');
+async function api(path,method='GET',body){
+ if(!state.token)throw new Error('Conecta un dispositivo autorizado.');
+ const response=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+state.token,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.error||'Error del servidor ('+response.status+')');
+ return data;
+}
+function updateControls(){
+ const selected=state.weighing,active=selected?.status==='active';
+ $('state').textContent=selected?'Pesaje '+selected.display_number+' · '+selected.local_day+' · '+(active?'En proceso':'Finalizado'):'Sin pesaje seleccionado';
+ $('stop').disabled=!active||state.busy;
+ $('sync').textContent=state.token?'Conectado':'Desconectado';
+}
+async function refreshList(){
+ const previous=$('weighings').value;
+ const data=await api('/weighings');
+ state.weighings=data.weighings||[];
+ $('weighings').replaceChildren(new Option('Seleccionar pesaje',''),...state.weighings.map(w=>new Option(w.local_day+' · Pesaje '+w.display_number+' · '+(w.status==='active'?'En proceso':'Finalizado'),w.id)));
+ const pick=state.weighings.find(w=>w.id===previous)||state.weighings.find(w=>w.id===state.weighing?.id)||state.weighings.find(w=>w.status==='active');
+ if(pick){$('weighings').value=pick.id;await refreshSelected(pick.id)}else{state.weighing=null;state.rows=[];renderRows()}
+ updateControls();
+}
+async function refreshSelected(id){
+ if(!id){state.weighing=null;state.rows=[];renderRows();updateControls();return}
+ const data=await api('/weighings/'+encodeURIComponent(id));
+ const currentFocus=document.activeElement,focused=currentFocus?.dataset?.rowId;
+ const editing=focused?{id:focused,value:currentFocus.value,start:currentFocus.selectionStart}:null;
+ state.weighing={...state.weighings.find(w=>w.id===id),...data.weighing};state.rows=data.rows||[];
+ renderRows(editing);updateControls();
+}
+function renderRows(editing){
+ const body=$('rows');body.replaceChildren();
+ if(!state.rows.length){const tr=body.insertRow();const td=tr.insertCell();td.colSpan=6;td.textContent='Sin BIN registrados';return}
+ const active=state.weighing?.status==='active';
+ for(const row of state.rows){
+  const tr=body.insertRow();if(row.gross_kg===null)tr.className='pending';
+  const cell=value=>{const td=tr.insertCell();td.textContent=String(value);return td};
+  cell(row.position);cell(row.bin_code||'—');
+  const td=tr.insertCell(),input=document.createElement('input');input.type='number';input.min='0';input.max='100000';input.step='1';input.inputMode='numeric';
+  input.dataset.rowId=row.id;input.value=editing?.id===row.id?editing.value:row.gross_kg??'';
+  input.disabled=!active;input.setAttribute('aria-label','Peso bruto BIN '+(row.bin_code||row.position));
+  input.addEventListener('keydown',async event=>{if(event.key!=='Enter')return;event.preventDefault();await saveAndAdvance(row.id,input)});
+  td.append(input);cell(row.tare_kg);cell(row.net_kg??'—');cell(row.gross_kg===null?'Pendiente':'Registrado');
+ }
+ if(editing){const el=[...body.querySelectorAll('input')].find(x=>x.dataset.rowId===editing.id);if(el){el.focus();}}
+}
+async function saveAndAdvance(id,input){
+ if(state.busy)return;
+ const row=state.rows.find(x=>x.id===id),v=input.value.trim();
+ if(!row||!/^[0-9]+$/.test(v)||Number(v)>100000){text('Ingresa un peso bruto válido.',true);return}
+ state.busy=true;input.disabled=true;updateControls();
+ try{
+  await api('/weighings/'+state.weighing.id+'/rows/'+id,'PATCH',{expected_revision:row.revision,gross_kg:Number(v)});
+  await refreshSelected(state.weighing.id);
+  const rows=state.rows,at=rows.findIndex(r=>r.id===id),next=rows.slice(at+1).find(r=>r.gross_kg===null)||rows.find(r=>r.gross_kg===null);
+  const nextInput=next?[...$('rows').querySelectorAll('input')].find(x=>x.dataset.rowId===next.id):null;
+  if(nextInput){nextInput.focus();nextInput.select()}
+  text('Peso guardado correctamente.');
+ }catch(e){text('No se guardó: '+e.message,true);await refreshSelected(state.weighing.id).catch(()=>{})}
+ finally{state.busy=false;updateControls()}
+}
+$('connect').onclick=async()=>{
+ state.token=$('token').value.trim();$('token').value='';
+ try{await refreshList();text('Sesión conectada.')}catch(e){state.token='';updateControls();text(e.message,true)}
+};
+$('refresh').onclick=()=>refreshList().catch(e=>text(e.message,true));
+$('weighings').onchange=()=>refreshSelected($('weighings').value).catch(e=>text(e.message,true));
+$('start').onclick=async()=>{
+ if(state.busy)return;
+ const local_day=$('day').value,display_number=Number($('number').value);
+ if(!local_day||!Number.isInteger(display_number)||display_number<1){text('Fecha o número inválido.',true);return}
+ state.busy=true;
+ try{
+  const result=await api('/weighings','POST',{local_day,display_number});
+  await refreshList();$('weighings').value=result.id;await refreshSelected(result.id);
+  text('Pesaje iniciado. Ya se puede escanear desde cualquier dispositivo conectado.');
+ }catch(e){text('No se inició: '+e.message,true)}finally{state.busy=false;updateControls()}
+};
+$('stop').onclick=async()=>{
+ if(state.busy||state.weighing?.status!=='active')return;
+ const id=state.weighing.id;
+ if(!confirm('¿Finalizar este pesaje para ambos equipos? Ya no se podrán agregar bins ni kilos.'))return;
+ state.busy=true;updateControls();
+ try{await api('/weighings/'+id+'/finalize','POST',{expected_revision:state.weighing.revision});await refreshList();$('weighings').value=id;await refreshSelected(id);text('Pesaje finalizado. El celular verá el cierre al sincronizar.')}
+ catch(e){text('No se pudo finalizar: '+e.message,true);await refreshList().catch(()=>{})}
+ finally{state.busy=false;updateControls()}
+};
+setInterval(async()=>{if(!state.token||state.busy)return;try{
+ const id=$('weighings').value;
+ if(!id)return;
+ await refreshList();
+ $('sync').textContent='Sincronizado';
+}catch(e){$('sync').textContent='Sin conexión';text('Error de actualización: '+e.message,true)}},5000);
+updateControls();
+</script></body></html>

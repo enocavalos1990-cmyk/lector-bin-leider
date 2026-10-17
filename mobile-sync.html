@@ -42,7 +42,7 @@ async function refresh(){
  const found=state.list.find(w=>w.id===previous)||state.list.find(w=>w.status==='active');
  if(found){$('weighings').value=found.id;await selectWeighing(found.id)}else await selectWeighing('');
 }
-async function run(action){if(state.busy)return;state.busy=true;update();try{await action()}catch(e){message(e.message,true)}finally{state.busy=false;update()}}
+async function run(action){if(state.busy)return false;state.busy=true;update();try{await action();return true}catch(e){message(e.message,true);return false}finally{state.busy=false;update()}}
 $('connect').onclick=()=>run(async()=>{state.token=$('token').value.trim();$('token').value='';try{await refresh();$('connection').textContent='Conectado'}catch(e){state.token='';$('connection').textContent='Sin conexión';throw e}});
 $('refresh').onclick=()=>run(refresh);
 $('weighings').onchange=()=>run(()=>selectWeighing($('weighings').value));
@@ -66,10 +66,10 @@ function decodeLeider(raw){try{
  return {folio:folio.toUpperCase(),bin_code:folio.replace(/\D/g,'').slice(-4)};
 }catch{return null}}
 async function capture(bin_code,folio,manual=false){
- if(state.busy)return;
- const w=state.weighing;if(!w||w.status!=='active'){message('Primero inicia o selecciona un pesaje activo',true);return}
- if(bin_code!=='NN'&&state.rows.some(r=>r.bin_code===bin_code)){message('BIN duplicado: '+bin_code,true);return}
- await run(async()=>{
+ if(state.busy)return false;
+ const w=state.weighing;if(!w||w.status!=='active'){message('Primero inicia o selecciona un pesaje activo',true);return false}
+ if(bin_code!=='NN'&&state.rows.some(r=>r.bin_code===bin_code)){message('BIN duplicado: '+bin_code,true);return false}
+ return await run(async()=>{
   // La posición la asigna D1; si dos dispositivos escriben juntos se reintenta una vez.
   try{await api('/weighings/'+w.id+'/rows','POST',{bin_code,folio,manual,tare_kg:41,gross_kg:null})}
   catch(error){
@@ -82,7 +82,7 @@ async function capture(bin_code,folio,manual=false){
   if(navigator.vibrate)navigator.vibrate(45);
  });
 }
-$('manualAdd').onclick=()=>{const v=$('manual').value.trim();if(!/^\d{4}$/.test(v)){message('Ingresa exactamente cuatro dígitos',true);return}capture(v,'MANUAL-'+v,true).then(()=>{$('manual').value=''})};
+$('manualAdd').onclick=()=>{const v=$('manual').value.trim();if(!/^\d{4}$/.test(v)){message('Ingresa exactamente cuatro dígitos',true);return}capture(v,'MANUAL-'+v,true).then(saved=>{if(saved)$('manual').value=''})};
 function stopCamera(){state.running=false;state.stream?.getTracks().forEach(t=>t.stop());state.stream=null;$('video').srcObject=null}
 $('stopCamera').onclick=stopCamera;
 $('startCamera').onclick=async()=>{

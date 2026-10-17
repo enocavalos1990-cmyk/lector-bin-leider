@@ -54,7 +54,7 @@ async function refreshSelected(id){
  if(!id){state.weighing=null;state.rows=[];renderRows();updateControls();return}
  const data=await api('/weighings/'+encodeURIComponent(id));
  const currentFocus=document.activeElement,focused=currentFocus?.dataset?.rowId;
- const editing=focused?{id:focused,value:currentFocus.value,start:currentFocus.selectionStart}:null;
+ const editing=focused?{id:focused,value:currentFocus.value}:null;
  state.weighing={...state.weighings.find(w=>w.id===id),...data.weighing};state.rows=data.rows||[];
  renderRows(editing);updateControls();
 }

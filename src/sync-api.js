@@ -31,7 +31,7 @@ async function handler(request,env){
   }
   if(request.method==="POST"&&path==="/api/weighings"){
     const body=await payload(request);
-    if(typeof body.local_day!=="string"||!/^\\d{4}-\\d{2}-\\d{2}$/.test(body.local_day))return error(400,"invalid_day");
+    if(typeof body.local_day!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(body.local_day))return error(400,"invalid_day");
     if(!Number.isInteger(body.display_number)||body.display_number<=0)return error(400,"invalid_number");
     const id=uuid(),now=new Date().toISOString();
     try{
@@ -39,7 +39,7 @@ async function handler(request,env){
     }catch{return error(409,"number_already_exists")}
     return json({id,revision:1},201);
   }
-  const match=/^\\/api\\/weighings\\/([A-Za-z0-9_-]+)(?:\\/rows(?:\\/([A-Za-z0-9_-]+))?|\\/finalize)?$/.exec(path);
+  const match=/^\/api\/weighings\/([A-Za-z0-9_-]+)(?:\/rows(?:\/([A-Za-z0-9_-]+))?|\/finalize)?$/.exec(path);
   if(!match||!validId(match[1]))return error(404,"not_found");
   const weighingId=match[1],rowId=match[2];
   const weighing=await db.prepare("SELECT id,status,revision FROM weighings WHERE id=? AND workspace_id=?").bind(weighingId,ws).first();
@@ -53,7 +53,7 @@ async function handler(request,env){
     const body=await payload(request);
     if(!Number.isInteger(body.position)||body.position<1||!validGross(body.gross_kg??null)||![41,44].includes(body.tare_kg))return error(400,"invalid_row");
     const code=body.bin_code??null;
-    if(code!==null&&!(code==="NN"||typeof code==="string"&&/^\\d{4}$/.test(code)))return error(400,"invalid_bin");
+    if(code!==null&&!(code==="NN"||typeof code==="string"&&/^\d{4}$/.test(code)))return error(400,"invalid_bin");
     const id=uuid();
     try{
       await db.prepare("INSERT INTO weighing_rows(id,weighing_id,position,bin_code,folio,manual,gross_kg,tare_kg) VALUES(?,?,?,?,?,?,?,?)")

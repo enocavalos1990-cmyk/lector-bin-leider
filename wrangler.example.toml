@@ -1,0 +1,19 @@
+# Preparación para el Worker ORIGINAL lector-bin-leider.
+# No ejecutar un despliegue sin configurar database_id y crear dispositivos autorizados.
+name = "lector-bin-leider"
+main = "src/worker-entry.js"
+compatibility_date = "2026-10-17"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lector-bin-leider"
+database_id = "REEMPLAZAR_CON_ID_D1_REAL"
+
+# Uso esperado una vez que D1 esté configurada:
+# wrangler d1 migrations apply lector-bin-leider --remote
+# wrangler deploy

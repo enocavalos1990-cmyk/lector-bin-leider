@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>LEIDER · Captura sincronizada (prueba)</title>
+<style>
+:root{font-family:system-ui,sans-serif;background:#f3f5f7;color:#17232e}*{box-sizing:border-box}body{margin:0}.wrap{padding:14px;max-width:650px;margin:auto}section{background:white;padding:16px;border-radius:14px;margin:12px 0}button,input,select{font:inherit;padding:12px;border:1px solid #d0d8df;border-radius:10px}button{font-weight:700}button.primary{background:#183c53;color:white}button:disabled{opacity:.5}video{width:100%;background:#171717;aspect-ratio:4/3;object-fit:cover;border-radius:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}.status{min-height:2em}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #eee}small{color:#5b6872}
+</style></head><body><main class="wrap"><h1>BIN LEIDER · Móvil</h1><small>Captura sincronizada experimental. Se conecta al mismo pesaje que el PC.</small>
+<section><label>Clave de dispositivo <input id="token" type="password" autocomplete="off" placeholder="Token autorizado"></label><button id="connect" class="primary">Conectar</button><p id="connection" class="status">Sin conexión</p></section>
+<section><div class="actions"><select id="weighings" aria-label="Elegir pesaje"><option value="">Sin pesaje</option></select><button id="refresh">Actualizar</button></div>
+<div class="actions"><label>Fecha <input id="day" type="date"></label><label>N.º <input id="number" type="number" min="1" value="1" style="max-width:90px"></label></div><div class="actions"><button id="begin" class="primary">Iniciar pesaje</button><button id="finish">Finalizar pesaje</button></div><p id="state">Sin pesaje seleccionado</p></section>
+<section><video id="video" playsinline muted></video><div class="actions"><button id="startCamera" class="primary">Iniciar cámara</button><button id="stopCamera">Detener cámara</button></div><div class="actions"><input id="manual" inputmode="numeric" maxlength="4" placeholder="BIN 4 dígitos"><button id="manualAdd">Agregar manual</button></div><p id="message" class="status" aria-live="polite">Selecciona un pesaje activo antes de capturar.</p></section>
+<section><h2>BIN registrados</h2><table><thead><tr><th>#</th><th>BIN</th><th>Bruto</th></tr></thead><tbody id="rows"></tbody></table></section>
+</main><script>
+const $=id=>document.getElementById(id);
+const state={token:'',list:[],weighing:null,rows:[],busy:false,stream:null,detector:null,running:false,lastRaw:'',lastAt:0};
+$('day').value=new Date().toLocaleDateString('en-CA');
+function message(s,bad=false){$('message').textContent=s;$('message').style.color=bad?'#a00':'#116234'}
+async function api(path,method='GET',body){
+ if(!state.token)throw Error('Primero conecta el dispositivo');
+ const response=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+state.token,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.error||'Error del servidor '+response.status);
+ return data;
+}
+function update(){
+ const w=state.weighing,active=w?.status==='active';
+ $('state').textContent=w?'Pesaje '+w.display_number+' ('+w.local_day+') · '+(active?'En proceso':'Finalizado'):'Sin pesaje seleccionado';
+ $('finish').disabled=!active||state.busy;$('startCamera').disabled=!active||state.busy;
+ $('manualAdd').disabled=!active||state.busy;$('begin').disabled=state.busy;
+ $('rows').replaceChildren();
+ for(const r of state.rows){const tr=$('rows').insertRow();for(const v of [r.position,r.bin_code||'—',r.gross_kg??'Pendiente']){const td=tr.insertCell();td.textContent=String(v)}}
+ if(!active&&state.running)stopCamera();
+}
+async function selectWeighing(id){
+ if(!id){state.weighing=null;state.rows=[];update();return}
+ const response=await api('/weighings/'+encodeURIComponent(id));
+ state.weighing={...state.list.find(w=>w.id===id),...response.weighing};
+ state.rows=response.rows||[];update();
+}
+async function refresh(){
+ const previous=$('weighings').value||state.weighing?.id;
+ const data=await api('/weighings');state.list=data.weighings||[];
+ $('weighings').replaceChildren(new Option('Selecciona pesaje',''),...state.list.map(w=>new Option(w.local_day+' · Pesaje '+w.display_number+' · '+w.status,w.id)));
+ const found=state.list.find(w=>w.id===previous)||state.list.find(w=>w.status==='active');
+ if(found){$('weighings').value=found.id;await selectWeighing(found.id)}else await selectWeighing('');
+}
+async function run(action){if(state.busy)return;state.busy=true;update();try{await action()}catch(e){message(e.message,true)}finally{state.busy=false;update()}}
+$('connect').onclick=()=>run(async()=>{state.token=$('token').value.trim();$('token').value='';try{await refresh();$('connection').textContent='Conectado'}catch(e){state.token='';$('connection').textContent='Sin conexión';throw e}});
+$('refresh').onclick=()=>run(refresh);
+$('weighings').onchange=()=>run(()=>selectWeighing($('weighings').value));
+$('begin').onclick=()=>run(async()=>{
+ const local_day=$('day').value,display_number=Number($('number').value);
+ if(!local_day||!Number.isInteger(display_number)||display_number<1)throw Error('Fecha o número inválido');
+ const w=await api('/weighings','POST',{local_day,display_number});await refresh();
+ $('weighings').value=w.id;await selectWeighing(w.id);message('Pesaje iniciado y compartido con el PC');
+});
+$('finish').onclick=()=>run(async()=>{
+ const w=state.weighing;if(!w||w.status!=='active')return;
+ if(!confirm('¿Finalizar este pesaje en ambos equipos?'))return;
+ stopCamera();
+ await api('/weighings/'+w.id+'/finalize','POST',{expected_revision:w.revision});
+ await refresh();message('Pesaje finalizado. El PC verá el cierre al actualizar.');
+});
+function decodeLeider(raw){try{
+ const u=new URL(raw),data=u.searchParams.get('data');if(!data)return null;
+ let b64=data.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';
+ const folio=atob(b64).split('#').find(x=>/^B\d+$/i.test(x));if(!folio)return null;
+ return {folio:folio.toUpperCase(),bin_code:folio.replace(/\D/g,'').slice(-4)};
+}catch{return null}}
+async function capture(bin_code,folio,manual=false){
+ if(state.busy)return;
+ const w=state.weighing;if(!w||w.status!=='active'){message('Primero inicia o selecciona un pesaje activo',true);return}
+ if(bin_code!=='NN'&&state.rows.some(r=>r.bin_code===bin_code)){message('BIN duplicado: '+bin_code,true);return}
+ await run(async()=>{
+  const position=Math.max(0,...state.rows.map(r=>r.position))+1;
+  await api('/weighings/'+w.id+'/rows','POST',{position,bin_code,folio,manual,tare_kg:41,gross_kg:null});
+  await selectWeighing(w.id);message('Guardado BIN '+bin_code+'; disponible en PC');
+  if(navigator.vibrate)navigator.vibrate(45);
+ });
+}
+$('manualAdd').onclick=()=>{const v=$('manual').value.trim();if(!/^\d{4}$/.test(v)){message('Ingresa exactamente cuatro dígitos',true);return}capture(v,'MANUAL-'+v,true).then(()=>{$('manual').value=''})};
+function stopCamera(){state.running=false;state.stream?.getTracks().forEach(t=>t.stop());state.stream=null;$('video').srcObject=null}
+$('stopCamera').onclick=stopCamera;
+$('startCamera').onclick=async()=>{
+ if(state.weighing?.status!=='active'){message('Selecciona un pesaje activo',true);return}
+ if(!('BarcodeDetector' in window)){message('El navegador no admite BarcodeDetector',true);return}
+ try{
+  state.detector=new BarcodeDetector({formats:['qr_code']});
+  state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+  $('video').srcObject=state.stream;await $('video').play();state.running=true;loop();message('Escáner listo');
+ }catch(e){stopCamera();message('No se pudo abrir la cámara: '+e.message,true)}
+};
+async function loop(){
+ if(!state.running)return;
+ try{for(const result of await state.detector.detect($('video'))){
+  const raw=result.rawValue,now=Date.now();
+  if(raw===state.lastRaw&&now-state.lastAt<1800)continue;
+  state.lastRaw=raw;state.lastAt=now;
+  const decoded=decodeLeider(raw);if(decoded)await capture(decoded.bin_code,decoded.folio);else message('QR no corresponde a LEIDER',true);
+ }}catch{}
+ if(state.running)requestAnimationFrame(loop);
+}
+setInterval(async()=>{if(!state.token||state.busy)return;try{await refresh();$('connection').textContent='Conectado'}catch(e){$('connection').textContent='Sin conexión';message('Sincronización pendiente: '+e.message,true)}},5000);
+update();
+</script></body></html>

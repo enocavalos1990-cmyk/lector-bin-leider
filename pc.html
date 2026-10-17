@@ -109,7 +109,9 @@ $('start').onclick=async()=>{
 $('stop').onclick=async()=>{
  if(state.busy||state.weighing?.status!=='active')return;
  const id=state.weighing.id;
- if(!confirm('¿Finalizar este pesaje para ambos equipos? Ya no se podrán agregar bins ni kilos.'))return;
+ const missing=state.rows.filter(r=>r.gross_kg===null).length;
+ const warning=missing?'Hay '+missing+' BIN sin peso. Esos datos quedarán pendientes en un pesaje finalizado.\\n\\n':'';
+ if(!confirm(warning+'¿Finalizar este pesaje para ambos equipos? Ya no se podrán agregar bins ni kilos.'))return;
  state.busy=true;updateControls();
  try{await api('/weighings/'+id+'/finalize','POST',{expected_revision:state.weighing.revision});await refreshList();$('weighings').value=id;await refreshSelected(id);text('Pesaje finalizado. El celular verá el cierre al sincronizar.')}
  catch(e){text('No se pudo finalizar: '+e.message,true);await refreshList().catch(()=>{})}

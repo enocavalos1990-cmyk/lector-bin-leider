@@ -29,6 +29,10 @@ class PanelsSmokeTest(unittest.TestCase):
   for source in (self.pc,self.mobile):
    self.assertNotIn("localStorage.setItem",source)
    self.assertNotIn("sessionStorage.setItem",source)
+ def test_bin_manual_permanece_si_falla_guardado(self):
+  self.assertIn("return await run(async()=>",self.mobile)
+  self.assertIn("if(saved)$(\'manual\').value=\'\'",self.mobile)
+  self.assertIn("return false",self.mobile)
  def test_backend_valida_permisos_y_cierre(self):
   self.assertIn("authorized_devices",self.api)
   self.assertIn("status='active'",self.api)

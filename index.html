@@ -142,7 +142,7 @@ document.querySelector('#calibreName').onkeydown=e=>{if(e.key==='Enter'){e.preve
 
 document.querySelector('#exportCalibres').onclick=()=>downloadExcel(calibreRows.map((r,i)=>({'#':i+1,'Calibre':r.calibre,'Bruto':r.gross??'','Neto':r.gross==null?'':r.gross-r.tare})), 'calibres_'+new Date().toISOString().slice(0,10));
 calibreLoad();
-function selectPlan(mode){if(!weighSession||weighSession.ended||weighSession.mode)return;weighSession.mode=mode;scans=[];seen.clear();last.textContent='----';full.textContent='';saveScans();render();receptionRows=[];saveReception();renderReception();calibreRows=[];calibreSave();saveSession();renderSession();statusEl.textContent='Pesaje '+(mode==='qr'?'QR':'por calibre')+' iniciado';}
+function selectPlan(mode){if(!weighSession||weighSession.ended||weighSession.mode)return;weighSession.mode=mode;selectedTare=null;document.querySelector('#tara41').checked=false;document.querySelector('#tara44').checked=false;scans=[];seen.clear();last.textContent='----';full.textContent='';saveScans();render();receptionRows=[];saveReception();renderReception();calibreRows=[];calibreSave();saveSession();renderSession();statusEl.textContent='Pesaje '+(mode==='qr'?'QR':'por calibre')+' iniciado';}
 document.querySelector('#chooseQr').onclick=()=>selectPlan('qr');
 document.querySelector('#chooseCalibre').onclick=()=>selectPlan('calibre');
 restoreScans();restoreSession();restoreHistory();restoreReception();renderSession();render();

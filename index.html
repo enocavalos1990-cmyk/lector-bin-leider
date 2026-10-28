@@ -107,7 +107,7 @@ function calibreAdd(which){
  if(!weighSession||weighSession.ended){document.querySelector('#calibreMsg').textContent='Inicia un pesaje primero.';return}
  const input=document.querySelector(which==='calibre'?'#calibreName':'#calibreGross');
  const value=input.value.trim(),tare=Number(document.querySelector('#calibreTare').value);
- if(!value||(which==='gross'&&(!/^\\d+$/.test(value)||Number(value)>100000))){document.querySelector('#calibreMsg').textContent='Revisa el dato ingresado.';return}
+ if(!value||(which==='gross'&&(!/^[0-9]+$/.test(value)||Number(value)>100000))){document.querySelector('#calibreMsg').textContent='Revisa el dato ingresado.';return}
  // Completar la primera fila pendiente, manteniendo el orden de ingreso.
  const index=calibreRows.findIndex(r=>which==='calibre'?!r.calibre:r.gross==null);
  if(index<0)calibreRows.push({calibre:'',gross:null,tare});

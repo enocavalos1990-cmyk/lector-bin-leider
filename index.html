@@ -30,13 +30,11 @@
 <div id="qrControls" class="buttons"><button id="exportReception" class="primary">Exportar Excel</button><button id="captureQr">Capturar QR</button></div><div id="calibreControls" style="margin-top:12px"><button id="openCalibres" type="button" style="width:100%">Ingresar calibre</button></div>
 <div id="calibrePanel" class="card" style="display:none;margin-top:12px;border:1px solid #d3dce4;box-shadow:none">
 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>Calibres manuales</b><button id="closeCalibres" type="button" style="padding:8px">Cerrar</button></div>
-<p class="muted">Ingresa los calibres o los pesos primero. Se emparejan en el mismo orden. Tara predeterminada: 44 kg.</p>
+<p class="muted">Ingresa los calibres o los pesos primero. Se emparejan en el mismo orden. El ingreso de pesos es el mismo de arriba. Tara predeterminada: 44 kg.</p>
 <label>Tara <select id="calibreTare" style="padding:8px"><option value="44">44 kg</option><option value="41">41 kg</option></select></label>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
-<label>Calibre <input id="calibreName" placeholder="Ej.: 70" style="width:100%;padding:12px"></label>
-<label>Bruto (kg) <input id="calibreGross" inputmode="numeric" type="number" min="0" placeholder="Ej.: 450" style="width:100%;padding:12px"></label>
-<button type="button" id="saveCalibre">Agregar calibre</button><button type="button" id="saveCalibreGross">Agregar peso</button>
-</div><div id="calibreMsg" class="status muted" aria-live="polite"></div>
+<div style="display:flex;gap:8px;margin-top:12px"><input id="calibreName" placeholder="Calibre (ej.: 70, A, 70)" autocomplete="off" style="flex:1;min-width:0;padding:12px;font-size:20px"><button type="button" id="saveCalibre">Agregar calibre</button></div>
+<p class="muted">Ingresa todos los pesos acumulados arriba y todos los calibres aquí, en cualquier orden. Se asignan por número de fila, aunque se repitan.</p>
+<div id="calibreMsg" class="status muted" aria-live="polite"></div>
 <table class="list"><thead><tr><th>#</th><th>Calibre</th><th>Bruto</th><th>Neto</th></tr></thead><tbody id="calibreRows"></tbody></table>
 <button id="exportCalibres" type="button" style="width:100%;margin-top:10px">Exportar calibres Excel</button>
 </div>
@@ -108,25 +106,22 @@ function calibreRender(){
   }
  }
 }
-function calibreAdd(which){
- if(!weighSession||weighSession.ended||weighSession.mode!=='calibre'){document.querySelector('#calibreMsg').textContent='Inicia un pesaje primero.';return}
- const input=document.querySelector(which==='calibre'?'#calibreName':'#calibreGross');
- const value=input.value.trim(),tare=Number(document.querySelector('#calibreTare').value);
- if(!value||(which==='gross'&&(!/^[0-9]+$/.test(value)||Number(value)>100000))){document.querySelector('#calibreMsg').textContent='Revisa el dato ingresado.';return}
- // Completar la primera fila pendiente, manteniendo el orden de ingreso.
- const index=calibreRows.findIndex(r=>which==='calibre'?!r.calibre:r.gross==null);
- if(index<0)calibreRows.push({calibre:'',gross:null,tare});
- const target=calibreRows[index<0?calibreRows.length-1:index];
- if(which==='calibre')target.calibre=value;else{target.gross=Number(value);target.tare=tare}
+function calibreAdd(){
+ if(!weighSession||weighSession.ended||weighSession.mode!=='calibre'){document.querySelector('#calibreMsg').textContent='Primero inicia un pesaje por calibre.';return}
+ const input=document.querySelector('#calibreName'),value=input.value.trim();
+ if(!value){document.querySelector('#calibreMsg').textContent='Ingresa un calibre.';return}
+ const index=calibreRows.findIndex(r=>!r.calibre);
+ if(index<0)calibreRows.push({calibre:value,gross:null,tare:44});
+ else calibreRows[index].calibre=value;
  calibreSave();input.value='';input.focus();
- document.querySelector('#calibreMsg').textContent='Registrado. '+calibreRows.filter(r=>r.calibre&&r.gross!=null).length+' filas completas.';
+ document.querySelector('#calibreMsg').textContent='Calibre agregado en orden. Puedes seguir ingresando calibres repetidos.';
 }
 document.querySelector('#openCalibres').onclick=()=>{if(weighSession?.mode!=='calibre')return;receptionMode='calibre';document.querySelector('#calibrePanel').style.display='block';document.querySelector('#calibreName').focus()};
 document.querySelector('#closeCalibres').onclick=()=>{document.querySelector('#calibrePanel').style.display='none'};
-document.querySelector('#saveCalibre').onclick=()=>calibreAdd('calibre');
-document.querySelector('#saveCalibreGross').onclick=()=>calibreAdd('gross');
-document.querySelector('#calibreName').onkeydown=e=>{if(e.key==='Enter')calibreAdd('calibre')};
-document.querySelector('#calibreGross').onkeydown=e=>{if(e.key==='Enter')calibreAdd('gross')};
+document.querySelector('#saveCalibre').onclick=calibreAdd;
+
+document.querySelector('#calibreName').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();calibreAdd()}};
+
 document.querySelector('#exportCalibres').onclick=()=>downloadExcel(calibreRows.map((r,i)=>({'#':i+1,'Calibre':r.calibre,'Bruto':r.gross??'','Neto':r.gross==null?'':r.gross-r.tare})), 'calibres_'+new Date().toISOString().slice(0,10));
 calibreLoad();
 function selectPlan(mode){if(!weighSession||weighSession.ended||weighSession.mode)return;weighSession.mode=mode;scans=[];seen.clear();last.textContent='----';full.textContent='';saveScans();render();receptionRows=[];saveReception();renderReception();calibreRows=[];calibreSave();saveSession();renderSession();statusEl.textContent='Pesaje '+(mode==='qr'?'QR':'por calibre')+' iniciado';}
